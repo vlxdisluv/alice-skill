@@ -20,5 +20,10 @@ func webhook(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 
-	_, _ = w.Write([]byte(`{"response": { "text": "Hello world"}}`))
+	_, _ = w.Write([]byte(`{
+        "response": {
+            "text": "Извините, я пока ничего не умею"
+        },
+        "version": "1.0"
+    }`))
 }
