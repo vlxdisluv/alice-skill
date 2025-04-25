@@ -27,23 +27,64 @@ func TestWebhook(t *testing.T) {
 
 	// описываем набор данных: метод запроса, ожидаемый код ответа, ожидаемое тело
 	testCases := []struct {
+		name         string // добавляем название тестов
 		method       string
 		expectedCode int
+		body         string // добавляем тело запроса в табличные тесты
 		expectedBody string
 	}{
-		{method: http.MethodGet, expectedCode: http.StatusMethodNotAllowed, expectedBody: ""},
-		{method: http.MethodPut, expectedCode: http.StatusMethodNotAllowed, expectedBody: ""},
-		{method: http.MethodDelete, expectedCode: http.StatusMethodNotAllowed, expectedBody: ""},
-		{method: http.MethodPost, expectedCode: http.StatusOK, expectedBody: successBody},
+		{
+			name:         "method_get",
+			method:       http.MethodGet,
+			expectedCode: http.StatusMethodNotAllowed,
+			expectedBody: "",
+		},
+		{
+			name:         "method_put",
+			method:       http.MethodPut,
+			expectedCode: http.StatusMethodNotAllowed,
+			expectedBody: "",
+		},
+		{
+			name:         "method_delete",
+			method:       http.MethodDelete,
+			expectedCode: http.StatusMethodNotAllowed,
+			expectedBody: "",
+		},
+		{
+			name:         "method_post_without_body",
+			method:       http.MethodPost,
+			expectedCode: http.StatusInternalServerError,
+			expectedBody: "",
+		},
+		{
+			name:         "method_post_unsupported_type",
+			method:       http.MethodPost,
+			body:         `{"request": {"type": "idunno", "command": "do something"}, "version": "1.0"}`,
+			expectedCode: http.StatusUnprocessableEntity,
+			expectedBody: "",
+		},
+		{
+			name:         "method_post_success",
+			method:       http.MethodPost,
+			body:         `{"request": {"type": "SimpleUtterance", "command": "sudo do something"}, "version": "1.0"}`,
+			expectedCode: http.StatusOK,
+			expectedBody: successBody,
+		},
 	}
 
 	for _, tc := range testCases {
-		t.Run(tc.method, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			// делаем запрос с помощью библиотеки resty к адресу запущенного сервера,
 			// который хранится в поле URL соответствующей структуры
 			req := resty.New().R()
 			req.Method = tc.method
 			req.URL = srv.URL
+
+			if len(tc.body) > 0 {
+				req.SetHeader("Content-Type", "application/json")
+				req.SetBody(tc.body)
+			}
 
 			resp, err := req.Send()
 			assert.NoError(t, err, "error making HTTP request")
