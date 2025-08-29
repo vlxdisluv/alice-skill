@@ -27,7 +27,7 @@ func TestGzipCompression(t *testing.T) {
 	// ожидаемое содержимое тела ответа при успешном запросе
 	successBody := `{
         "response": {
-            "text": "Извините, я пока ничего не умею"
+            "text": "Для вас нет новых сообщений."
         },
         "version": "1.0"
     }`
