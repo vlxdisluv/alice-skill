@@ -4,14 +4,39 @@ import (
 	"bytes"
 	"compress/gzip"
 	"github.com/stretchr/testify/require"
+	"github.com/vlxdisluv/alice-skill/internal/store"
+	"github.com/vlxdisluv/alice-skill/internal/store/mock"
+	"go.uber.org/mock/gomock"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestGzipCompression(t *testing.T) {
-	handler := http.HandlerFunc(gzipMiddleware(webhook))
+	// создадим конроллер моков и экземпляр мок-хранилища
+	ctrl := gomock.NewController(t)
+	s := mock.NewMockStore(ctrl)
+
+	// определим, какой результат будем получать от «хранилища»
+	messages := []store.Message{
+		{
+			Sender:  "411419e5-f5be-4cdb-83aa-2ca2b6648353",
+			Time:    time.Now(),
+			Payload: "Hello!",
+		},
+	}
+
+	// установим условие: при любом вызове метода ListMessages возвращать массив messages без ошибки
+	s.EXPECT().
+		ListMessages(gomock.Any(), gomock.Any()).
+		Return(messages, nil)
+
+	// создадим экземпляр приложения и передадим ему «хранилище»
+	appInstance := newApp(s)
+
+	handler := http.HandlerFunc(gzipMiddleware(appInstance.webhook))
 
 	srv := httptest.NewServer(handler)
 	defer srv.Close()

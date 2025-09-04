@@ -3,26 +3,50 @@ package main
 import (
 	"github.com/go-resty/resty/v2"
 	"github.com/stretchr/testify/assert"
+	"github.com/vlxdisluv/alice-skill/internal/store"
+	"github.com/vlxdisluv/alice-skill/internal/store/mock"
+	"go.uber.org/mock/gomock"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestWebhook(t *testing.T) {
+	// создадим конроллер моков и экземпляр мок-хранилища
+	ctrl := gomock.NewController(t)
+	s := mock.NewMockStore(ctrl)
+
+	// определим, какой результат будем получать от «хранилища»
+	messages := []store.Message{
+		{
+			Sender:  "411419e5-f5be-4cdb-83aa-2ca2b6648353",
+			Time:    time.Now(),
+			Payload: "Hello!",
+		},
+	}
+
+	// установим условие: при любом вызове метода ListMessages возвращать массив messages без ошибки
+	s.EXPECT().
+		ListMessages(gomock.Any(), gomock.Any()).
+		Return(messages, nil)
+
+	// создадим экземпляр приложения и передадим ему «хранилище»
+	appInstance := newApp(s)
+
 	// тип http.HandlerFunc реализует интерфейс http.Handler
 	// это поможет передать хендлер тестовому серверу
-	handler := http.HandlerFunc(webhook)
+	handler := http.HandlerFunc(appInstance.webhook)
 	// запускаем тестовый сервер, будет выбран первый свободный порт
 	srv := httptest.NewServer(handler)
 	// останавливаем сервер после завершения теста
 	defer srv.Close()
 
-	// описываем набор данных: метод запроса, ожидаемый код ответа, ожидаемое тело
 	testCases := []struct {
-		name         string // добавляем название тестов
+		name         string // добавим название тестов
 		method       string
+		body         string // добавим тело запроса в табличные тесты
 		expectedCode int
-		body         string // добавляем тело запроса в табличные тесты
 		expectedBody string
 	}{
 		{
@@ -61,15 +85,12 @@ func TestWebhook(t *testing.T) {
 			method:       http.MethodPost,
 			body:         `{"request": {"type": "SimpleUtterance", "command": "sudo do something"}, "session": {"new": true}, "version": "1.0"}`,
 			expectedCode: http.StatusOK,
-			// ответ стал сложнее, поэтому сравниваем его с шаблоном вместо точной строки
-			expectedBody: `Точное время .* часов, .* минут. Для вас нет новых сообщений.`,
+			expectedBody: `Точное время .* часов, .* минут. Для вас 1 новых сообщений.`,
 		},
 	}
 
 	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			// делаем запрос с помощью библиотеки resty к адресу запущенного сервера,
-			// который хранится в поле URL соответствующей структуры
+		t.Run(tc.method, func(t *testing.T) {
 			req := resty.New().R()
 			req.Method = tc.method
 			req.URL = srv.URL
@@ -83,9 +104,7 @@ func TestWebhook(t *testing.T) {
 			assert.NoError(t, err, "error making HTTP request")
 
 			assert.Equal(t, tc.expectedCode, resp.StatusCode(), "Response code didn't match expected")
-			// проверяем корректность полученного тела ответа, если мы его ожидаем
 			if tc.expectedBody != "" {
-				// сравниваем тело ответа с ожидаемым шаблоном
 				assert.Regexp(t, tc.expectedBody, string(resp.Body()))
 			}
 		})
